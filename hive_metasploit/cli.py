@@ -29,16 +29,20 @@ def main() -> None:
 
     # Hive arguments
     parser.add_argument(
-        "-hs", "--hive_server", type=str, help="Set Hive server URL", required=True
+        "-hs", "--hive_server", type=str, help="Set Hive server URL", default=None
     )
     parser.add_argument(
-        "-hu", "--hive_username", type=str, help="Set Hive username", required=True
+        "-hu", "--hive_username", type=str, help="Set Hive username", default=None
     )
     parser.add_argument(
-        "-hp", "--hive_password", type=str, help="Set Hive password", required=True
+        "-hp", "--hive_password", type=str, help="Set Hive password", default=None
     )
     parser.add_argument(
-        "-hn", "--hive_project", type=str, help="Set Hive project name", required=True
+        "-hn",
+        "--hive_project",
+        type=str,
+        help="Set Hive project name",
+        default="msf_project",
     )
 
     # MSF arguments
@@ -47,27 +51,31 @@ def main() -> None:
         "--msf_api_url",
         type=str,
         help="set MSF REST API server URL",
-        required=True,
+        default=None,
     )
     parser.add_argument(
-        "-mk", "--msf_api_key", type=str, help="set MSF REST API key", required=True
+        "-mk", "--msf_api_key", type=str, help="set MSF REST API key", default=None
     )
     parser.add_argument(
-        "-mw", "--msf_workspace", type=str, help="set MSF Workspace name", required=True
+        "-mw",
+        "--msf_workspace",
+        type=str,
+        help="set MSF Workspace name",
+        default="default",
     )
 
     # Import or Export
     parser.add_argument(
         "-I",
-        "--import_from_msf",
+        "--import",
         action="store_true",
-        help="import to Hive from MSF workspace",
+        help="import data form MSF workspace to Hive project",
     )
     parser.add_argument(
         "-E",
-        "--export_to_msf",
+        "--export",
         action="store_true",
-        help="export from Hive to MSF workspace",
+        help="export data form Hive project to MSF workspace",
     )
 
     # Proxy
