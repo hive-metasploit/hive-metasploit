@@ -10,12 +10,13 @@ Copyright 2021, Hive Metasploit connector
 from unittest import TestCase
 from typing import Optional, List
 from uuid import UUID
-from libmsf import Msf
+from libmsf import Msf, MsfData
 from hive_library import HiveLibrary
 from libmsf.rest import MsfRestApi
 from hive_library.rest import HiveRestApi
 from hive_metasploit import HiveMetasploit, MetasploitRecords
 from test_variables import MsfVariablesForTest, HiveVariablesForTest
+from time import sleep
 
 # Authorship information
 __author__ = "Vladimir Ivanov"
@@ -110,7 +111,7 @@ class HiveMetasploitTest(TestCase):
         self.assertLess(0, msf_variables.login.id)
 
         # Import data from Metasploit to Hive
-        imported_hosts = hive_metasploit.import_from_metasploit(
+        imported_hosts = hive_metasploit.import_from_hive_to_metasploit(
             hive_project_name=hive_variables.project.name,
             metasploit_workspace_name=msf_variables.workspace.name,
         )
@@ -226,6 +227,51 @@ class HiveMetasploitTest(TestCase):
                 vuln_record_exist = True
         self.assertTrue(cred_record_exist)
         self.assertTrue(vuln_record_exist)
+
+        # Delete MSF workspace and Hive project
+        msf_api.delete_workspace(workspace_name=msf_variables.workspace.name)
+        hive_api.delete_project_by_name(project_name=hive_variables.project.name)
+
+    # Export data from Hive to Metasploit
+    def test02_export(self):
+        # Delete MSF workspace and Hive project
+        msf_api.delete_workspace(workspace_name=msf_variables.workspace.name)
+        hive_api.delete_project_by_name(project_name=hive_variables.project.name)
+
+        # Create Hive project
+        hive_variables.project = hive_api.create_project(project=hive_variables.project)
+        self.assertIsInstance(hive_variables.project.id, UUID)
+
+        # Create Hive host
+        task_id: Optional[UUID] = hive_api.create_host(
+            project_id=hive_variables.project.id, host=hive_variables.host
+        )
+        self.assertIsInstance(task_id, UUID)
+        import_task_is_completed: bool = False
+        for _ in range(10):
+            if hive_api.task_is_completed(
+                project_id=hive_variables.project.id, task_id=task_id
+            ):
+                import_task_is_completed = True
+                break
+            else:
+                sleep(1)
+        self.assertTrue(import_task_is_completed)
+
+        # Export data from Hive to Metasploit
+        msf_data: MsfData = hive_metasploit.export_from_hive_to_metasploit(
+            hive_project_name=hive_variables.project.name,
+            metasploit_workspace_name=msf_variables.workspace.name,
+        )
+        self.assertEqual(msf_data.workspace, msf_variables.workspace.name)
+        self.assertLess(0, len(msf_data.workspaces))
+        self.assertLess(0, len(msf_data.hosts))
+        self.assertLess(0, len(msf_data.services))
+        self.assertLess(0, len(msf_data.vulns))
+        self.assertLess(0, len(msf_data.loots))
+        self.assertLess(0, len(msf_data.notes))
+        self.assertLess(0, len(msf_data.creds))
+        self.assertLess(0, len(msf_data.logins))
 
         # Delete MSF workspace and Hive project
         msf_api.delete_workspace(workspace_name=msf_variables.workspace.name)

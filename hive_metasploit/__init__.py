@@ -19,7 +19,7 @@ from uuid import UUID
 from hive_library import HiveLibrary
 from hive_library.enum import RecordTypes
 from hive_library.rest import HiveRestApi, AuthenticationError
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from socket import gethostbyname, gethostbyaddr, herror
 from ipaddress import IPv4Address, ip_address
 from marshmallow import fields, pre_load, post_load, EXCLUDE
@@ -207,14 +207,69 @@ class HiveMetasploit:
 
         return hive_hosts
 
-    def import_from_metasploit(
+    # Parse Hive records
+    def _parse_hive_record(
+        self, record: HiveLibrary.Record, result_object: dataclass
+    ) -> dataclass:
+        for child_record in record.value:
+            # If record value is not a record return empty object
+            if not isinstance(child_record, HiveLibrary.Record):
+                return result_object
+            field_name = child_record.name
+            field_value = child_record.value
+
+            # Parse MSF host record
+            if isinstance(result_object, Msf.Host):
+                for key, value in self.msf_records.Host.__dict__.items():
+                    if field_name == value:
+                        result_object.__dict__[key] = field_value
+
+            # Parse MSF loot record
+            if isinstance(result_object, Msf.Loot):
+                for key, value in self.msf_records.Loot.__dict__.items():
+                    if field_name == self.msf_records.Loot.data:
+                        field_value = b64encode(
+                            child_record.value.encode("utf-8")
+                        ).decode("utf-8")
+                    if field_name == value:
+                        result_object.__dict__[key] = field_value
+
+            # Parse MSF note record
+            if isinstance(result_object, Msf.Note):
+                for key, value in self.msf_records.Note.__dict__.items():
+                    if field_name == value:
+                        result_object.__dict__[key] = field_value
+
+            # Parse MSF vuln record
+            if isinstance(result_object, Msf.Vuln):
+                for key, value in self.msf_records.Vuln.__dict__.items():
+                    if field_name == value:
+                        result_object.__dict__[key] = field_value
+
+            # Parse MSF cred record
+            if isinstance(result_object, Msf.Cred):
+                if field_name == self.msf_records.Cred.username:
+                    result_object.username = field_value
+                if field_name == self.msf_records.Cred.module_full_name:
+                    result_object.module_fullname = field_value
+                if field_name == self.msf_records.Cred.private_type:
+                    result_object.private_type = field_value
+                if field_name == self.msf_records.Cred.private_data:
+                    result_object.private_data = field_value
+                if field_name == "Password":
+                    result_object.private_type = "password"
+                    result_object.private_data = field_value
+
+        return result_object
+
+    def import_from_hive_to_metasploit(
         self,
         hive_project_name: str,
         metasploit_workspace_name: str = "default",
         hive_host_tag: Optional[str] = None,
         hive_port_tag: Optional[str] = None,
         hive_auto_tag: bool = True,
-    ) -> Optional[List[HiveHost]]:
+    ) -> List[HiveHost]:
         """
         Import data from metasploit workspace to hive project
         Args:
@@ -224,7 +279,7 @@ class HiveMetasploit:
             hive_port_tag: Set Hive tag for port, example: 'port_tag'
             hive_auto_tag: Automatically add tag for Hive hosts
 
-        Returns: None if error or List of Hive hosts, example:
+        Returns: List of Hive hosts, example:
         [HiveHost(checkmarks=[], files=[], id=None, uuid=None, notes=[], ip=IPv4Address('192.168.1.1'), ip_binary=None,
                   records=[HiveLibrary.Record(children=[], create_time=None, creator_uuid=None, extra=None, id=None,
                                               uuid=None, import_type=None, name='Host information',
@@ -262,8 +317,9 @@ class HiveMetasploit:
                 hive_project_id: Optional[UUID] = self.hive_api.get_project_id_by_name(
                     project_name=hive_project_name
                 )
-                if hive_project_id is None:
-                    return None
+                assert (
+                    hive_project_id is not None
+                ), f"Failed to create Hive project with name: {hive_project_name}"
 
             # Get all MSF data
             msf_data: MsfData = self.msf_api.get_all_data(
@@ -603,3 +659,227 @@ class HiveMetasploit:
         except AssertionError as error:
             print(f"Assertion error: {error}")
         return hive_hosts
+
+    def export_from_hive_to_metasploit(
+        self,
+        hive_project_name: str,
+        metasploit_workspace_name: str = "default",
+    ) -> MsfData:
+        """
+        Export data from metasploit workspace to hive project
+        Args:
+            hive_project_name: Hive project name string, example: 'test_project'
+            metasploit_workspace_name: Metasploit workspace name string, example: 'test_workspace'
+
+        Returns: None if error or MsfData object, example:
+
+        """
+        msf_data: MsfData = MsfData(workspace=metasploit_workspace_name)
+        try:
+            # Get Hive project id by name
+            hive_project_id: Optional[UUID] = self.hive_api.get_project_id_by_name(
+                project_name=hive_project_name
+            )
+
+            # Not found Hive project
+            assert (
+                hive_project_id is not None
+            ), f"Not found Hive project with name: {hive_project_name}"
+
+            # Get MSF workspace or create it
+            msf_workspaces: Optional[
+                List[Msf.Workspace]
+            ] = self.msf_api.get_workspaces()
+
+            # Get list of MSF workspaces and check workspace with this name is exist or not
+            msf_workspace_id: int = -1
+            for msf_workspace in msf_workspaces:
+                msf_data.workspaces.append(msf_workspace)
+                if msf_workspace.name == metasploit_workspace_name:
+                    msf_workspace_id = msf_workspace.id
+
+            # Create MSF workspace if workspace with this name is not exist
+            if msf_workspace_id == -1:
+                msf_workspace: Msf.Workspace = Msf.Workspace(
+                    name=metasploit_workspace_name
+                )
+                msf_workspace.id = self.msf_api.create_workspace(
+                    workspace=msf_workspace
+                )
+                assert (
+                    msf_workspace.id != 1
+                ), f"Failed to create Metasploit workspace with name: {metasploit_workspace_name}"
+                msf_workspace_id = msf_workspace.id
+                msf_data.workspaces.append(msf_workspace)
+
+            # Get Hive hosts
+            hive_hosts: Optional[List[HiveLibrary.Host]] = self.hive_api.get_hosts(
+                project_id=hive_project_id
+            )
+
+            # Failed to get hosts from Hive project
+            assert (
+                hive_hosts is not None
+            ), f"Failed to get hosts from Hive project: {hive_project_name} ({hive_project_id})"
+
+            # Parse Hive hosts
+            for hive_host in hive_hosts:
+
+                # Make MSF objects
+                msf_host: Msf.Host = Msf.Host(workspace=msf_data.workspace)
+                msf_service: Msf.Service = Msf.Service(workspace=msf_data.workspace)
+                msf_loot: Msf.Loot = Msf.Loot(workspace=msf_data.workspace)
+                msf_note: Msf.Note = Msf.Note(workspace=msf_data.workspace)
+                msf_vuln: Msf.Vuln = Msf.Vuln(workspace=msf_data.workspace)
+                msf_cred: Msf.Cred = Msf.Cred(workspace_id=msf_workspace_id)
+
+                # Get host address
+                if isinstance(hive_host.ip, IPv4Address):
+                    msf_host.host = hive_host.ip
+                    msf_service.host = msf_host.host
+                    msf_loot.host = msf_host.host
+                    msf_note.host = msf_host.host
+                    msf_vuln.host = msf_host.host
+                    msf_cred.address = msf_host.host
+                else:
+                    continue
+
+                # Get hostname
+                if len(hive_host.names) > 0:
+                    msf_host.name = hive_host.names[0].hostname
+
+                # Parse host records
+                host_node = self.hive_api.get_host(
+                    project_id=hive_project_id, host_id=hive_host.id
+                )
+                if len(host_node.records) > 0:
+                    for record in host_node.records:
+                        if record.import_type == self.msf_records.tool_name:
+
+                            # Parse MSF Host information record
+                            if record.name == self.msf_records.host:
+                                msf_host = self._parse_hive_record(
+                                    record=record, result_object=msf_host
+                                )
+
+                            # Parse MSF Loot record
+                            if record.name == self.msf_records.loot:
+                                msf_loot = self._parse_hive_record(
+                                    record=record, result_object=msf_loot
+                                )
+                                if msf_loot.name is not None:
+                                    msf_data.loots.append(msf_loot)
+
+                            # Parse MSF Credential record
+                            if record.name == self.msf_records.cred:
+                                msf_cred = self._parse_hive_record(
+                                    record=record, result_object=msf_cred
+                                )
+                                if msf_cred.username is not None:
+                                    msf_data.creds.append(msf_cred)
+
+                            # Parse MSF Note record
+                            if record.name == self.msf_records.note:
+                                msf_note = self._parse_hive_record(
+                                    record=record, result_object=msf_note
+                                )
+                                if msf_note.data is not None:
+                                    msf_data.notes.append(msf_note)
+
+                            # Parse MSF vulnerability record
+                            if record.name == self.msf_records.vuln:
+                                msf_vuln = self._parse_hive_record(
+                                    record=record, result_object=msf_vuln
+                                )
+                                if msf_vuln.name is not None:
+                                    msf_data.vulns.append(msf_vuln)
+
+                # Add host to hosts for export list
+                if msf_host.host is not None:
+                    msf_data.hosts.append(msf_host)
+
+                # Make MSF services list for this host
+                if len(hive_host.ports) > 0:
+                    for hive_port in hive_host.ports:
+
+                        # Add port
+                        if isinstance(hive_port.port, int):
+                            msf_service.port = hive_port.port
+                            msf_cred.port = msf_service.port
+                            msf_vuln.port = msf_service.port
+
+                        # Add state
+                        if isinstance(hive_port.state, str):
+                            msf_service.state = hive_port.state
+
+                        # Add proto
+                        if isinstance(hive_port.protocol, str):
+                            msf_service.proto = hive_port.protocol
+                            msf_cred.protocol = msf_service.proto
+
+                        # Add service name
+                        if isinstance(hive_port.service.name, str):
+                            msf_service.name = hive_port.service.name
+                            msf_cred.service_name = msf_service.name
+
+                        # Add service info
+                        if isinstance(hive_port.service.product, str):
+                            msf_service.info = hive_port.service.product
+
+                        # Append current service in list for export
+                        if msf_service.port is not None:
+                            msf_data.services.append(msf_service)
+
+                        # Get port records
+                        port_node = self.hive_api.get_port(
+                            project_id=hive_project_id, port_id=hive_port.id
+                        )
+                        for record in port_node.records:
+                            if record.import_type == self.msf_records.tool_name:
+
+                                # Parse MSF Credential record
+                                if record.name == self.msf_records.cred:
+                                    msf_cred = self._parse_hive_record(
+                                        record=record, result_object=msf_cred
+                                    )
+                                    if msf_cred.username is not None:
+                                        msf_data.creds.append(msf_cred)
+
+                                # Parse MSF Vulnerability record
+                                if record.name == self.msf_records.vuln:
+                                    msf_vuln = self._parse_hive_record(
+                                        record=record, result_object=msf_vuln
+                                    )
+                                    if msf_vuln.name is not None:
+                                        msf_data.vulns.append(msf_vuln)
+
+                # Analyze credentials
+
+                # Add msf logins
+                for msf_cred in msf_data.creds:
+                    msf_login: Msf.Login = Msf.Login(workspace_id=msf_workspace_id)
+                    msf_login.service_name = msf_cred.service_name
+                    msf_login.port = msf_cred.port
+                    msf_login.protocol = msf_cred.protocol
+                    msf_login.address = msf_cred.address
+                    msf_login.last_attempted_at = (
+                        datetime.utcnow().isoformat()[:-3] + "Z"
+                    )
+                    msf_login.public = msf_cred.username
+                    msf_login.private = msf_cred.private_data
+                    msf_data.logins.append(msf_login)
+
+                # Credentials for export contains only uniq credentials
+                uniq_creds = list(
+                    {
+                        cred.username or cred.private_data or cred.port: cred
+                        for cred in msf_data.creds
+                    }.values()
+                )
+                msf_data.creds = uniq_creds
+
+                return msf_data
+
+        except AssertionError as error:
+            print(f"Assertion error: {error}")
+        return msf_data
