@@ -8,24 +8,17 @@ Copyright 2021, Hive Metasploit connector
 
 # Import
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from typing import Optional, List
 from libmsf import Msf, MsfData
 from libmsf.rest import MsfRestApi
-from hive_library.rest import HiveRestApi
 from datetime import datetime
-from re import compile, search, finditer, MULTILINE
-from urllib.parse import urlparse, ParseResult
 from uuid import UUID
 from hive_library import HiveLibrary
 from hive_library.enum import RecordTypes
-from hive_library.rest import HiveRestApi, AuthenticationError
+from hive_library.rest import HiveRestApi
+from hive_metasploit.color import Color
 from base64 import b64decode, b64encode
-from socket import gethostbyname, gethostbyaddr, herror
-from ipaddress import IPv4Address, ip_address
-from marshmallow import fields, pre_load, post_load, EXCLUDE
-from marshmallow.exceptions import ValidationError
-from marshmallow import Schema as MarshmallowSchema
-from json import loads, JSONDecodeError
+from ipaddress import IPv4Address
 from time import sleep
 
 # Authorship information
@@ -122,6 +115,7 @@ class HiveMetasploit:
             hive_server: Hive server URL string, example: 'https://hive.corp.test.com:443'
             proxy:HTTP Proxy URL string, example: 'http://127.0.0.1:8080'
         """
+        self._color: Color = Color()
         self.msf_records: MetasploitRecords = MetasploitRecords()
         self.msf_api: MsfRestApi = MsfRestApi(
             api_key=msf_api_key, api_url=msf_api_url, proxy=proxy
@@ -262,7 +256,7 @@ class HiveMetasploit:
 
         return result_object
 
-    def import_from_hive_to_metasploit(
+    def import_from_metasploit_to_hive(
         self,
         hive_project_name: str,
         metasploit_workspace_name: str = "default",
@@ -657,7 +651,7 @@ class HiveMetasploit:
             return hive_hosts
 
         except AssertionError as error:
-            print(f"Assertion error: {error}")
+            self._color.print_error("Assertion error:", f"{error}")
         return hive_hosts
 
     def export_from_hive_to_metasploit(
@@ -935,5 +929,5 @@ class HiveMetasploit:
                 return msf_data
 
         except AssertionError as error:
-            print(f"Assertion error: {error}")
+            self._color.print_error("Assertion error:", f"{error}")
         return msf_data
