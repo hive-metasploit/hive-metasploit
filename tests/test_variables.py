@@ -29,7 +29,7 @@ class MsfVariablesForTest:
 
     api_url: Optional[str] = None
     api_key: Optional[str] = None
-    proxy: Optional[str] = "http://127.0.0.1:8081"
+    proxy: Optional[str] = "http://127.0.0.1:8888"
 
     workspace: Msf.Workspace = Msf.Workspace(
         name="unit_test_workspace", description="Workspace for unit tests"
@@ -125,7 +125,7 @@ class HiveVariablesForTest:
     server: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
-    proxy: Optional[str] = "http://127.0.0.1:8081"
+    proxy: Optional[str] = "http://127.0.0.1:8888"
 
     project: HiveLibrary.Project = HiveLibrary.Project(
         name="unit_test_project", description="Project for unit test"

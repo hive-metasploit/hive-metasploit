@@ -736,11 +736,12 @@ class HiveMetasploit:
                 # Get host address
                 if isinstance(hive_host.ip, IPv4Address):
                     msf_host.host = hive_host.ip
-                    msf_service.host = msf_host.host
-                    msf_loot.host = msf_host.host
-                    msf_note.host = msf_host.host
-                    msf_vuln.host = msf_host.host
-                    msf_cred.address = msf_host.host
+                    msf_host.address = hive_host.ip
+                    msf_service.host = hive_host.ip
+                    msf_loot.host = hive_host.ip
+                    msf_note.host = hive_host.ip
+                    msf_vuln.host = hive_host.ip
+                    msf_cred.address = hive_host.ip
                 else:
                     continue
 
@@ -862,9 +863,7 @@ class HiveMetasploit:
                     msf_login.port = msf_cred.port
                     msf_login.protocol = msf_cred.protocol
                     msf_login.address = msf_cred.address
-                    msf_login.last_attempted_at = (
-                        datetime.utcnow().isoformat()[:-3] + "Z"
-                    )
+                    msf_login.last_attempted_at = datetime.utcnow()
                     msf_login.public = msf_cred.username
                     msf_login.private = msf_cred.private_data
                     msf_data.logins.append(msf_login)
@@ -877,6 +876,61 @@ class HiveMetasploit:
                     }.values()
                 )
                 msf_data.creds = uniq_creds
+
+                # Export hosts
+                for host_index in range(len(msf_data.hosts)):
+                    msf_data.hosts[host_index].id = self.msf_api.create_host(
+                        msf_data.hosts[host_index]
+                    )
+
+                # Export services
+                for service_index in range(len(msf_data.services)):
+                    msf_data.services[service_index].id = self.msf_api.create_service(
+                        msf_data.services[service_index]
+                    )
+
+                # Export vulnerabilities
+                for vuln_index in range(len(msf_data.vulns)):
+                    msf_data.vulns[vuln_index].id = self.msf_api.create_vuln(
+                        msf_data.vulns[vuln_index]
+                    )
+
+                # Export loots
+                for loot_index in range(len(msf_data.loots)):
+                    msf_data.loots[loot_index].id = self.msf_api.create_loot(
+                        msf_data.loots[loot_index]
+                    )
+
+                # Export notes
+                for note_index in range(len(msf_data.notes)):
+                    msf_data.notes[note_index].id = self.msf_api.create_note(
+                        msf_data.notes[note_index]
+                    )
+
+                # Export credentials
+                for cred_index in range(len(msf_data.creds)):
+                    msf_data.creds[cred_index].id = self.msf_api.create_cred(
+                        msf_data.creds[cred_index]
+                    )
+                    if msf_data.creds[cred_index].id is None:
+                        continue
+
+                    # Export logins
+                    for login_index in range(len(msf_data.logins)):
+                        msf_data.logins[login_index].core_id = msf_data.creds[
+                            cred_index
+                        ].id
+                        if (
+                            msf_data.logins[login_index].public
+                            == msf_data.creds[cred_index].username
+                            and msf_data.logins[login_index].private
+                            == msf_data.creds[cred_index].private_data
+                            and msf_data.logins[login_index].port
+                            == msf_data.creds[cred_index].port
+                        ):
+                            msf_data.logins[login_index].id = self.msf_api.create_login(
+                                msf_data.logins[login_index]
+                            )
 
                 return msf_data
 

@@ -248,7 +248,7 @@ class HiveMetasploitTest(TestCase):
         )
         self.assertIsInstance(task_id, UUID)
         import_task_is_completed: bool = False
-        for _ in range(10):
+        for _ in range(30):
             if hive_api.task_is_completed(
                 project_id=hive_variables.project.id, task_id=task_id
             ):
@@ -273,6 +273,119 @@ class HiveMetasploitTest(TestCase):
         self.assertLess(0, len(msf_data.creds))
         self.assertLess(0, len(msf_data.logins))
 
+        # Check workspace
+        workspace: Msf.Workspace = msf_data.workspaces[-1]
+        self.assertNotEqual(workspace.id, -1)
+        self.assertIsNotNone(workspace.id)
+        msf_variables.workspace.id = workspace.id
+        self.assertEqual(workspace.name, msf_variables.workspace.name)
+
+        # Check host
+        host: Msf.Host = msf_data.hosts[0]
+        self.assertNotEqual(host.id, -1)
+        self.assertIsNotNone(host.id)
+        msf_variables.host = msf_api.get_hosts(msf_variables.workspace.name)[0]
+        self.assertEqual(host.id, msf_variables.host.id)
+        self.assertEqual(host.workspace, msf_variables.workspace.name)
+        self.assertEqual(host.address, str(msf_variables.host.address))
+        self.assertEqual(host.mac, msf_variables.host.mac)
+        self.assertEqual(host.name, msf_variables.host.name)
+        self.assertEqual(host.state, msf_variables.host.state)
+        self.assertEqual(host.os_name, msf_variables.host.os_name)
+        self.assertEqual(host.os_flavor, msf_variables.host.os_flavor)
+        self.assertEqual(host.os_sp, msf_variables.host.os_sp)
+        self.assertEqual(host.os_lang, msf_variables.host.os_lang)
+        self.assertEqual(host.arch, msf_variables.host.arch)
+        self.assertEqual(host.purpose, msf_variables.host.purpose)
+        self.assertEqual(host.info, msf_variables.host.info)
+        self.assertEqual(host.comments, msf_variables.host.comments)
+        self.assertEqual(host.scope, msf_variables.host.scope)
+        self.assertEqual(host.virtual_host, msf_variables.host.virtual_host)
+
+        # Check service
+        service: Msf.Service = msf_data.services[0]
+        self.assertNotEqual(service.id, -1)
+        self.assertIsNotNone(service.id)
+        msf_variables.service = msf_api.get_services(msf_variables.workspace.name)[0]
+        self.assertEqual(service.id, msf_variables.service.id)
+        self.assertEqual(service.workspace, msf_variables.workspace.name)
+        self.assertEqual(service.host, str(msf_variables.host.address))
+        self.assertEqual(service.port, msf_variables.service.port)
+        self.assertEqual(service.proto, msf_variables.service.proto)
+        self.assertEqual(service.state, msf_variables.service.state)
+        self.assertEqual(service.name, msf_variables.service.name)
+        self.assertEqual(service.info, msf_variables.service.info)
+
+        # Check vulnerability
+        vuln: Msf.Vuln = msf_data.vulns[0]
+        self.assertNotEqual(vuln.id, -1)
+        self.assertIsNotNone(vuln.id)
+        msf_variables.vuln = msf_api.get_vulns(msf_variables.workspace.name)[0]
+        self.assertEqual(vuln.id, msf_variables.vuln.id)
+        self.assertEqual(vuln.workspace, msf_variables.workspace.name)
+        self.assertEqual(vuln.host, str(msf_variables.host.address))
+        self.assertEqual(vuln.port, msf_variables.service.port)
+        self.assertEqual(vuln.name, msf_variables.vuln.name)
+        self.assertEqual(vuln.info, msf_variables.vuln.info)
+        self.assertIn(vuln.refs[0], msf_variables.vuln.refs)
+        self.assertIn(vuln.refs[1], msf_variables.vuln.refs)
+
+        # Check loot
+        loot: Msf.Loot = msf_data.loots[0]
+        self.assertNotEqual(loot.id, -1)
+        self.assertIsNotNone(loot.id)
+        msf_variables.loot = msf_api.get_loots(msf_variables.workspace.name)[0]
+        self.assertEqual(loot.id, msf_variables.loot.id)
+        self.assertEqual(loot.workspace, msf_variables.workspace.name)
+        self.assertEqual(loot.host, str(msf_variables.host.address))
+        self.assertEqual(loot.data, msf_variables.loot.data)
+        self.assertEqual(loot.content_type, msf_variables.loot.content_type)
+        self.assertEqual(loot.name, msf_variables.loot.name)
+        self.assertEqual(loot.info, msf_variables.loot.info)
+        self.assertEqual(loot.ltype, msf_variables.loot.ltype)
+
+        # Check note
+        note: Msf.Note = msf_data.notes[0]
+        self.assertNotEqual(note.id, -1)
+        self.assertIsNotNone(note.id)
+        msf_variables.note = msf_api.get_notes(msf_variables.workspace.name)[0]
+        self.assertEqual(note.id, msf_variables.note.id)
+        self.assertEqual(note.workspace, msf_variables.workspace.name)
+        self.assertEqual(note.host, str(msf_variables.host.address))
+        self.assertEqual(note.ntype, msf_variables.note.ntype)
+        self.assertEqual(note.data, msf_variables.note.data)
+
+        # Check credential
+        cred: Msf.Cred = msf_data.creds[0]
+        self.assertNotEqual(cred.id, -1)
+        self.assertIsNotNone(cred.id)
+        msf_variables.cred = msf_api.get_creds(msf_variables.workspace.name)[0]
+        self.assertEqual(cred.id, msf_variables.cred.id)
+        self.assertEqual(cred.workspace_id, msf_variables.workspace.id)
+        self.assertEqual(cred.address, str(msf_variables.host.address))
+        self.assertEqual(cred.port, msf_variables.service.port)
+        self.assertEqual(cred.protocol, msf_variables.service.proto)
+        self.assertEqual(cred.service_name, msf_variables.service.name)
+        self.assertEqual(cred.username, msf_variables.cred.public.username)
+        self.assertEqual(cred.private_data, msf_variables.cred.private.data)
+        self.assertIn(cred.private_type.capitalize(), msf_variables.cred.private.type)
+        self.assertIn(cred.origin_type.capitalize(), msf_variables.cred.origin.type)
+        self.assertEqual(cred.module_fullname, msf_variables.cred.origin.module_full_name)
+
+        # Check login
+        login: Msf.Login = msf_data.logins[-1]
+        self.assertNotEqual(login.id, -1)
+        self.assertIsNotNone(login.id)
+        logins: Optional[List[Msf.Login]] = msf_api.get_logins()
+        for login in logins:
+            if login.service_id == msf_variables.service.id:
+                msf_variables.login = login
+                break
+        self.assertEqual(login.id, msf_variables.login.id)
+        self.assertEqual(login.core_id, msf_variables.cred.id)
+        self.assertEqual(login.status, "Successful")
+
         # Delete MSF workspace and Hive project
+        msf_api.delete_logins(ids=[login.id])
         msf_api.delete_workspace(workspace_name=msf_variables.workspace.name)
         hive_api.delete_project_by_name(project_name=hive_variables.project.name)
