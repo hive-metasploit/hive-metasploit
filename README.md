@@ -1,4 +1,4 @@
-# hive-metasploit
+hive-metasploit
 ===================
 
 ![logo](https://hive-metasploit.github.io/images/logo.jpeg) 
