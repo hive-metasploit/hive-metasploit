@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Description
 """
 Hive Metasploit connector console client

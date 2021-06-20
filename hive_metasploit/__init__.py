@@ -721,7 +721,6 @@ class HiveMetasploit:
 
                 # Make MSF objects
                 msf_host: Msf.Host = Msf.Host(workspace=msf_data.workspace)
-                msf_service: Msf.Service = Msf.Service(workspace=msf_data.workspace)
                 msf_loot: Msf.Loot = Msf.Loot(workspace=msf_data.workspace)
                 msf_note: Msf.Note = Msf.Note(workspace=msf_data.workspace)
                 msf_vuln: Msf.Vuln = Msf.Vuln(workspace=msf_data.workspace)
@@ -731,7 +730,6 @@ class HiveMetasploit:
                 if isinstance(hive_host.ip, IPv4Address):
                     msf_host.host = hive_host.ip
                     msf_host.address = hive_host.ip
-                    msf_service.host = hive_host.ip
                     msf_loot.host = hive_host.ip
                     msf_note.host = hive_host.ip
                     msf_vuln.host = hive_host.ip
@@ -796,6 +794,12 @@ class HiveMetasploit:
                 # Make MSF services list for this host
                 if len(hive_host.ports) > 0:
                     for hive_port in hive_host.ports:
+
+                        # Init MSF service object
+                        msf_service: Msf.Service = Msf.Service(
+                            workspace=msf_data.workspace,
+                            host=hive_host.ip
+                        )
 
                         # Add port
                         if isinstance(hive_port.port, int):
