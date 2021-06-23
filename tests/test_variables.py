@@ -18,7 +18,7 @@ __author__ = "Vladimir Ivanov"
 __copyright__ = "Copyright 2021, Hive Metasploit connector"
 __credits__ = [""]
 __license__ = "MIT"
-__version__ = "0.0.1a1"
+__version__ = "0.0.1a2"
 __maintainer__ = "Vladimir Ivanov"
 __email__ = "ivanov.vladimir.mail@gmail.com"
 __status__ = "Development"
@@ -377,4 +377,11 @@ class HiveVariablesForTest:
             HiveLibrary.Tag(name="Vulnerable: Unit test vuln name"),
             HiveLibrary.Tag(name="Credential: UnitTestUser"),
         ],
+    )
+
+    credential: HiveLibrary.Credential = HiveLibrary.Credential(
+        type="password",
+        login="UnitTestUser",
+        value="UnitTestPassword",
+        tags=[HiveLibrary.Tag(name="metasploit_credential")],
     )

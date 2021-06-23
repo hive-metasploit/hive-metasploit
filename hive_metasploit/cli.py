@@ -8,7 +8,7 @@ Copyright 2021, Hive Metasploit connector
 
 # Import
 from argparse import ArgumentParser
-from hive_metasploit import HiveMetasploit, HiveHost
+from hive_metasploit import HiveMetasploit, HiveObjects
 from hive_metasploit.color import Color
 from libmsf import MsfData
 from typing import List
@@ -18,7 +18,7 @@ __author__ = "Vladimir Ivanov"
 __copyright__ = "Copyright 2021, Hive Metasploit connector"
 __credits__ = [""]
 __license__ = "MIT"
-__version__ = "0.0.1a1"
+__version__ = "0.0.1a2"
 __maintainer__ = "Vladimir Ivanov"
 __email__ = "ivanov.vladimir.mail@gmail.com"
 __status__ = "Development"
@@ -131,7 +131,7 @@ def main() -> None:
 
         # Import data from metasploit workspace to hive project
         if args.import_to_hive:
-            hive_hosts: List[HiveHost] = hive_metasploit.import_from_metasploit_to_hive(
+            hive_objects: HiveObjects = hive_metasploit.import_from_metasploit_to_hive(
                 hive_project_name=args.hive_project,
                 metasploit_workspace_name=args.msf_workspace,
                 hive_host_tag=args.hive_host_tag,
@@ -145,7 +145,8 @@ def main() -> None:
                 args.hive_project,
             )
 
-            for hive_host in hive_hosts:
+            # Print imported hosts
+            for hive_host in hive_objects.hosts:
                 for hive_port in hive_host.ports:
                     if hive_host.import_result:
                         color.print_success(
@@ -161,6 +162,23 @@ def main() -> None:
                             "port:",
                             str(hive_port.port),
                         )
+
+            # Print imported credentials
+            for hive_credential in hive_objects.credentials:
+                if hive_credential.import_result:
+                    color.print_success(
+                        "Successfully imported credential:",
+                        f"{hive_credential.login}/{hive_credential.value} ({hive_credential.type})",
+                        "for host:",
+                        str(hive_credential.assets[0].asset),
+                    )
+                else:
+                    color.print_error(
+                        "Failed to import credential:",
+                        f"{hive_credential.login}/{hive_credential.value} ({hive_credential.type})",
+                        "for host:",
+                        str(hive_credential.assets[0].asset),
+                    )
 
         # Export data from hive project to metasploit workspace
         elif args.export_from_hive:
@@ -264,14 +282,14 @@ def main() -> None:
                 if msf_cred.id != -1:
                     color.print_success(
                         "Successfully exported credential:",
-                        f"{msf_cred.username}/{msf_cred.private_data}",
+                        f"{msf_cred.username}/{msf_cred.private_data} ({msf_cred.private_type})",
                         "for host:",
                         str(msf_cred.address),
                     )
                 else:
                     color.print_error(
                         "Failed to export credential:",
-                        f"{msf_cred.username}/{msf_cred.private_data}",
+                        f"{msf_cred.username}/{msf_cred.private_data} ({msf_cred.private_type})",
                         "for host:",
                         str(msf_cred.address),
                     )

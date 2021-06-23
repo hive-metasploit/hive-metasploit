@@ -25,7 +25,7 @@ __author__ = "Vladimir Ivanov"
 __copyright__ = "Copyright 2021, Hive Metasploit connector"
 __credits__ = [""]
 __license__ = "MIT"
-__version__ = "0.0.1a1"
+__version__ = "0.0.1a2"
 __maintainer__ = "Vladimir Ivanov"
 __email__ = "ivanov.vladimir.mail@gmail.com"
 __status__ = "Development"
@@ -113,12 +113,12 @@ class HiveMetasploitTest(TestCase):
         self.assertLess(0, msf_variables.login.id)
 
         # Import data from Metasploit to Hive
-        imported_hosts = hive_metasploit.import_from_metasploit_to_hive(
+        hive_objects = hive_metasploit.import_from_metasploit_to_hive(
             hive_project_name=hive_variables.project.name,
             metasploit_workspace_name=msf_variables.workspace.name,
         )
-        self.assertEqual(len(imported_hosts), 1)
-        self.assertTrue(imported_hosts[0].import_result)
+        self.assertEqual(len(hive_objects.hosts), 1)
+        self.assertTrue(hive_objects.hosts[0].import_result)
 
         # Check Hive project is exist
         hive_projects: Optional[List[HiveLibrary.Host]] = hive_api.get_projects_list()
@@ -229,6 +229,22 @@ class HiveMetasploitTest(TestCase):
                 vuln_record_exist = True
         self.assertTrue(cred_record_exist)
         self.assertTrue(vuln_record_exist)
+
+        # Check hive credentials
+        self.assertIsInstance(hive_objects.credentials, List)
+        self.assertEqual(len(hive_objects.credentials), 1)
+        hive_credential = hive_objects.credentials[0]
+        self.assertEqual(hive_credential.assets[0].asset, hive_host.ip)
+        self.assertEqual(hive_credential.type, hive_variables.credential.type)
+        self.assertEqual(hive_credential.login, hive_variables.credential.login)
+        self.assertEqual(hive_credential.value, hive_variables.credential.value)
+        self.assertEqual(
+            hive_credential.tags[0].name, hive_variables.credential.tags[0].name
+        )
+
+        # Delete MSF workspace and Hive project
+        msf_api.delete_workspace(workspace_name=msf_variables.workspace.name)
+        hive_api.delete_project_by_name(project_name=hive_variables.project.name)
 
     # Export data from Hive to Metasploit
     def test02_export(self):
@@ -386,6 +402,10 @@ class HiveMetasploitTest(TestCase):
         self.assertEqual(login.status, "Successful")
         msf_api.delete_logins(ids=[login.id])
 
+        # Delete MSF workspace and Hive project
+        msf_api.delete_workspace(workspace_name=msf_variables.workspace.name)
+        hive_api.delete_project_by_name(project_name=hive_variables.project.name)
+
     # Cli import data from Metasploit to Hive
     def test03_cli_import(self):
         # Delete MSF workspace and Hive project
@@ -407,32 +427,63 @@ class HiveMetasploitTest(TestCase):
         self.assertLess(0, msf_variables.host.id)
 
         # Create MSF service
+        msf_variables.service.host = msf_variables.host.address
+        msf_variables.service.workspace = msf_variables.workspace.name
         msf_variables.service.id = msf_api.create_service(msf_variables.service)
         self.assertIsInstance(msf_variables.service.id, int)
         self.assertLess(0, msf_variables.service.id)
 
         # Create MSF vulnerability
+        msf_variables.vuln.host = msf_variables.host.address
+        msf_variables.vuln.port = msf_variables.service.port
+        msf_variables.vuln.workspace = msf_variables.workspace.name
         msf_variables.vuln.id = msf_api.create_vuln(msf_variables.vuln)
         self.assertIsInstance(msf_variables.vuln.id, int)
         self.assertLess(0, msf_variables.vuln.id)
 
         # Create MSF loot
+        msf_variables.loot.host = msf_variables.host.address
+        msf_variables.loot.workspace = msf_variables.workspace.name
         msf_variables.loot.id = msf_api.create_loot(msf_variables.loot)
         self.assertIsInstance(msf_variables.loot.id, int)
         self.assertLess(0, msf_variables.loot.id)
 
         # Create MSF note
+        msf_variables.note.host = msf_variables.host.address
+        msf_variables.note.workspace = msf_variables.workspace.name
         msf_variables.note.id = msf_api.create_note(msf_variables.note)
         self.assertIsInstance(msf_variables.note.id, int)
         self.assertLess(0, msf_variables.note.id)
 
         # Create MSF credential
+        msf_variables.cred.address = msf_variables.host.address
+        msf_variables.cred.port = msf_variables.service.port
+        if isinstance(msf_variables.cred.origin, Msf.Origin):
+            msf_variables.cred.module_fullname = msf_variables.cred.origin.module_full_name
+        else:
+            msf_variables.cred.module_fullname = msf_variables.cred.module_fullname
+        if isinstance(msf_variables.cred.origin, Msf.Origin):
+            msf_variables.cred.username = msf_variables.cred.public.username
+        else:
+            msf_variables.cred.username = msf_variables.cred.username
+        if isinstance(msf_variables.cred.origin, Msf.Origin):
+            msf_variables.cred.private_data = msf_variables.cred.private.data
+        else:
+            msf_variables.cred.private_data = msf_variables.cred.private_data
+        msf_variables.cred.private_type = "password"
+        msf_variables.cred.service_name = msf_variables.service.name
+        msf_variables.cred.protocol = msf_variables.service.proto
+        msf_variables.cred.origin_type = "service"
         msf_variables.cred.workspace_id = msf_variables.workspace.id
         msf_variables.cred.id = msf_api.create_cred(msf_variables.cred)
         self.assertIsInstance(msf_variables.cred.id, int)
         self.assertLess(0, msf_variables.cred.id)
 
         # Create MSF login
+        msf_variables.login.address = msf_variables.host.address
+        msf_variables.login.port = msf_variables.service.port
+        msf_variables.login.service_name = msf_variables.service.name
+        msf_variables.login.protocol = msf_variables.service.proto
         msf_variables.login.workspace_id = msf_variables.workspace.id
         msf_variables.login.core_id = msf_variables.cred.id
         msf_variables.login.id = msf_api.create_login(msf_variables.login)
@@ -441,7 +492,8 @@ class HiveMetasploitTest(TestCase):
 
         # Cli import data from Metasploit to Hive
         dir: str = path.dirname(path.dirname(path.realpath(__file__)))
-        cli: str = f"python3 {path.join(dir, 'hive_metasploit_cli.py')} "
+        python: str = "~/.pyenv/versions/3.6.13/bin/python3.6"
+        cli: str = f"{python} {path.join(dir, 'hive_metasploit_cli.py')} "
         cli += f"-hn {hive_variables.project.name} "
         cli += f"-mw {msf_variables.workspace.name} "
         cli += f"--proxy {msf_variables.proxy} "
@@ -451,6 +503,9 @@ class HiveMetasploitTest(TestCase):
         self.assertIn(hive_variables.project.name, out)
         self.assertIn(msf_variables.workspace.name, out)
         self.assertIn(str(msf_variables.host.address), out)
+        self.assertIn(str(msf_variables.cred.username), out)
+        self.assertIn(str(msf_variables.cred.private_data), out)
+        self.assertIn(str(msf_variables.cred.private_type), out)
 
         # Check Hive project is exist
         hive_projects: Optional[List[HiveLibrary.Host]] = hive_api.get_projects_list()
@@ -543,7 +598,7 @@ class HiveMetasploitTest(TestCase):
                 for value in record.value:
                     self.assertIn(
                         value.name,
-                        ["Username", "Module", "Password"],
+                        ["Username", "Module", "Password", "Credentials private type"],
                     )
                 cred_record_exist = True
             if record.name == msf_records.vuln:
@@ -558,6 +613,25 @@ class HiveMetasploitTest(TestCase):
                 vuln_record_exist = True
         self.assertTrue(cred_record_exist)
         self.assertTrue(vuln_record_exist)
+
+        # Check hive credentials
+        hive_credentials: Optional[List[HiveLibrary.Credential]] = hive_api.get_credentials(
+            project_id=hive_variables.project.id
+        )
+        self.assertIsInstance(hive_credentials, List)
+        self.assertEqual(len(hive_credentials), 1)
+        hive_credential = hive_credentials[0]
+        self.assertEqual(hive_credential.assets[0].asset, hive_host.ip)
+        self.assertEqual(hive_credential.type, hive_variables.credential.type)
+        self.assertEqual(hive_credential.login, hive_variables.credential.login)
+        self.assertEqual(hive_credential.value, hive_variables.credential.value)
+        self.assertEqual(
+            hive_credential.tags[0].name, hive_variables.credential.tags[0].name
+        )
+
+        # Delete MSF workspace and Hive project
+        msf_api.delete_workspace(workspace_name=msf_variables.workspace.name)
+        hive_api.delete_project_by_name(project_name=hive_variables.project.name)
 
     # Cli export data from Hive to Metasploit
     def test04_cli_export(self):
@@ -587,7 +661,8 @@ class HiveMetasploitTest(TestCase):
 
         # Cli import data from Metasploit to Hive
         dir: str = path.dirname(path.dirname(path.realpath(__file__)))
-        cli: str = f"python3 {path.join(dir, 'hive_metasploit_cli.py')} "
+        python: str = "~/.pyenv/versions/3.6.13/bin/python3.6"
+        cli: str = f"{python} {path.join(dir, 'hive_metasploit_cli.py')} "
         cli += f"-hn {hive_variables.project.name} "
         cli += f"-mw {msf_variables.workspace.name} "
         cli += f"--proxy {msf_variables.proxy} "
@@ -598,15 +673,22 @@ class HiveMetasploitTest(TestCase):
         self.assertIn(msf_variables.workspace.name, out)
         self.assertIn(str(msf_variables.host.address), out)
         self.assertIn(str(msf_variables.service.port), out)
+        self.assertIn(str(msf_variables.service.proto), out)
         self.assertIn(str(msf_variables.vuln.name), out)
-        self.assertIn(str(msf_variables.loot.name), out)
+        self.assertIn(str(msf_variables.vuln.refs[0]), out)
+        self.assertIn(str(path.dirname(msf_variables.loot.path)), out)
+        self.assertIn(str(msf_variables.loot.ltype), out)
         self.assertIn(str(msf_variables.note.data), out)
         self.assertIn(str(msf_variables.cred.username), out)
         self.assertIn(str(msf_variables.cred.private_data), out)
         msf_data: MsfData = msf_api.get_all_data(workspace=msf_variables.workspace.name)
 
         # Check workspace
-        workspace: Msf.Workspace = msf_data.workspaces[-1]
+        workspace = Msf.Workspace()
+        for created_workspace in msf_data.workspaces:
+            if created_workspace.name == msf_data.workspace:
+                workspace = created_workspace
+                break
         self.assertNotEqual(workspace.id, -1)
         self.assertIsNotNone(workspace.id)
         msf_variables.workspace.id = workspace.id
@@ -618,8 +700,8 @@ class HiveMetasploitTest(TestCase):
         self.assertIsNotNone(host.id)
         msf_variables.host = msf_api.get_hosts(msf_variables.workspace.name)[0]
         self.assertEqual(host.id, msf_variables.host.id)
-        self.assertEqual(host.workspace, msf_variables.workspace.name)
-        self.assertEqual(host.address, str(msf_variables.host.address))
+        self.assertEqual(host.workspace_id, msf_variables.workspace.id)
+        self.assertEqual(host.address, msf_variables.host.address)
         self.assertEqual(host.mac, msf_variables.host.mac)
         self.assertEqual(host.name, msf_variables.host.name)
         self.assertEqual(host.state, msf_variables.host.state)
@@ -640,8 +722,7 @@ class HiveMetasploitTest(TestCase):
         self.assertIsNotNone(service.id)
         msf_variables.service = msf_api.get_services(msf_variables.workspace.name)[0]
         self.assertEqual(service.id, msf_variables.service.id)
-        self.assertEqual(service.workspace, msf_variables.workspace.name)
-        self.assertEqual(service.host, str(msf_variables.host.address))
+        self.assertEqual(service.host.address, msf_variables.host.address)
         self.assertEqual(service.port, msf_variables.service.port)
         self.assertEqual(service.proto, msf_variables.service.proto)
         self.assertEqual(service.state, msf_variables.service.state)
@@ -654,9 +735,8 @@ class HiveMetasploitTest(TestCase):
         self.assertIsNotNone(vuln.id)
         msf_variables.vuln = msf_api.get_vulns(msf_variables.workspace.name)[0]
         self.assertEqual(vuln.id, msf_variables.vuln.id)
-        self.assertEqual(vuln.workspace, msf_variables.workspace.name)
-        self.assertEqual(vuln.host, str(msf_variables.host.address))
-        self.assertEqual(vuln.port, msf_variables.service.port)
+        self.assertEqual(vuln.host.address, msf_variables.host.address)
+        self.assertEqual(vuln.service_id, msf_variables.service.id)
         self.assertEqual(vuln.name, msf_variables.vuln.name)
         self.assertEqual(vuln.info, msf_variables.vuln.info)
         self.assertIn(vuln.refs[0], msf_variables.vuln.refs)
@@ -668,8 +748,7 @@ class HiveMetasploitTest(TestCase):
         self.assertIsNotNone(loot.id)
         msf_variables.loot = msf_api.get_loots(msf_variables.workspace.name)[0]
         self.assertEqual(loot.id, msf_variables.loot.id)
-        self.assertEqual(loot.workspace, msf_variables.workspace.name)
-        self.assertEqual(loot.host, str(msf_variables.host.address))
+        self.assertEqual(loot.host.address, msf_variables.host.address)
         self.assertEqual(loot.data, msf_variables.loot.data)
         self.assertEqual(loot.content_type, msf_variables.loot.content_type)
         self.assertEqual(loot.name, msf_variables.loot.name)
@@ -682,8 +761,7 @@ class HiveMetasploitTest(TestCase):
         self.assertIsNotNone(note.id)
         msf_variables.note = msf_api.get_notes(msf_variables.workspace.name)[0]
         self.assertEqual(note.id, msf_variables.note.id)
-        self.assertEqual(note.workspace, msf_variables.workspace.name)
-        self.assertEqual(note.host, str(msf_variables.host.address))
+        self.assertEqual(note.host.address, msf_variables.host.address)
         self.assertEqual(note.ntype, msf_variables.note.ntype)
         self.assertEqual(note.data, msf_variables.note.data)
 
@@ -694,16 +772,12 @@ class HiveMetasploitTest(TestCase):
         msf_variables.cred = msf_api.get_creds(msf_variables.workspace.name)[0]
         self.assertEqual(cred.id, msf_variables.cred.id)
         self.assertEqual(cred.workspace_id, msf_variables.workspace.id)
-        self.assertEqual(cred.address, str(msf_variables.host.address))
-        self.assertEqual(cred.port, msf_variables.service.port)
-        self.assertEqual(cred.protocol, msf_variables.service.proto)
-        self.assertEqual(cred.service_name, msf_variables.service.name)
-        self.assertEqual(cred.username, msf_variables.cred.public.username)
-        self.assertEqual(cred.private_data, msf_variables.cred.private.data)
-        self.assertIn(cred.private_type.capitalize(), msf_variables.cred.private.type)
-        self.assertIn(cred.origin_type.capitalize(), msf_variables.cred.origin.type)
+        self.assertEqual(cred.origin.service_id, msf_variables.service.id)
+        self.assertEqual(cred.public.username, msf_variables.cred.public.username)
+        self.assertEqual(cred.private.data, msf_variables.cred.private.data)
+        self.assertIn(cred.private.type, msf_variables.cred.private.type)
         self.assertEqual(
-            cred.module_fullname, msf_variables.cred.origin.module_full_name
+            cred.origin.module_full_name, msf_variables.cred.origin.module_full_name
         )
 
         # Check login
@@ -719,3 +793,7 @@ class HiveMetasploitTest(TestCase):
         self.assertEqual(login.core_id, msf_variables.cred.id)
         self.assertEqual(login.status, "Successful")
         msf_api.delete_logins(ids=[login.id])
+
+        # Delete MSF workspace and Hive project
+        msf_api.delete_workspace(workspace_name=msf_variables.workspace.name)
+        hive_api.delete_project_by_name(project_name=hive_variables.project.name)

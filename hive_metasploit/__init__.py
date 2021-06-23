@@ -7,7 +7,7 @@ Copyright 2021, Hive Metasploit connector
 """
 
 # Import
-from dataclasses import dataclass
+from dataclasses import dataclass, field, fields
 from typing import Optional, List
 from libmsf import Msf, MsfData
 from libmsf.rest import MsfRestApi
@@ -26,7 +26,7 @@ __author__ = "Vladimir Ivanov"
 __copyright__ = "Copyright 2021, Hive Metasploit connector"
 __credits__ = [""]
 __license__ = "MIT"
-__version__ = "0.0.1a1"
+__version__ = "0.0.1a2"
 __maintainer__ = "Vladimir Ivanov"
 __email__ = "ivanov.vladimir.mail@gmail.com"
 __status__ = "Development"
@@ -90,8 +90,30 @@ class MetasploitRecords:
 
 
 @dataclass
+class MetasploitCredTypes:
+    password: str = "Metasploit::Credential::Password"
+    ssh_key: str = "Metasploit::Credential::SSHKey"
+    ntlm_hash: str = "Metasploit::Credential::NTLMHash"
+    postgres_md5: str = "Metasploit::Credential::PostgresMD5"
+    nonreplayable_hash: str = "Metasploit::Credential::NonreplayableHash"
+    replayable_hash: str = "Metasploit::Credential::ReplayableHash"
+    blank: str = "Metasploit::Credential::BlankPassword"
+
+
+@dataclass
 class HiveHost(HiveLibrary.Host):
     import_result: bool = False
+
+
+@dataclass
+class HiveCredential(HiveLibrary.Credential):
+    import_result: bool = False
+
+
+@dataclass
+class HiveObjects:
+    hosts: List[HiveHost] = field(default_factory=lambda: [])
+    credentials: List[HiveCredential] = field(default_factory=lambda: [])
 
 
 # Class HiveMetasploit
@@ -248,11 +270,13 @@ class HiveMetasploit:
                     result_object.module_fullname = field_value
                 if field_name == self.msf_records.Cred.private_type:
                     result_object.private_type = field_value
-                if field_name == self.msf_records.Cred.private_data:
-                    result_object.private_data = field_value
-                if field_name == "Password":
-                    result_object.private_type = "password"
-                    result_object.private_data = field_value
+                for type_key, type_val in MetasploitCredTypes.__dict__.items():
+                    try:
+                        if field_name == type_val.split("::")[-1]:
+                            result_object.private_type = type_key
+                            result_object.private_data = field_value
+                    except AttributeError:
+                        continue
 
         return result_object
 
@@ -263,7 +287,7 @@ class HiveMetasploit:
         hive_host_tag: Optional[str] = None,
         hive_port_tag: Optional[str] = None,
         hive_auto_tag: bool = True,
-    ) -> List[HiveHost]:
+    ) -> HiveObjects:
         """
         Import data from metasploit workspace to hive project
         Args:
@@ -297,6 +321,8 @@ class HiveMetasploit:
 
         """
         hive_hosts: List[HiveHost] = list()
+        hive_credentials: List[HiveCredential] = list()
+        hive_objects: HiveObjects = HiveObjects()
         try:
             # Get Hive project id by name
             hive_project_id: Optional[UUID] = self.hive_api.get_project_id_by_name(
@@ -546,6 +572,16 @@ class HiveMetasploit:
                 # Add record if service and credential is not None
                 if msf_service.id != -1 and msf_cred.id != -1:
 
+                    # Set private type
+                    private_type: str = "password"
+                    for type_key, type_val in MetasploitCredTypes.__dict__.items():
+                        if msf_cred.private.type == type_val:
+                            private_type = type_key
+                            self.msf_records.Cred.private_data = type_val.split("::")[
+                                -1
+                            ]
+                            break
+
                     # Set service id for this credential
                     msf_cred.service_id = msf_service.id
 
@@ -575,27 +611,17 @@ class HiveMetasploit:
                             msf_cred.private.data is not None
                             and msf_cred.private.type is not None
                         ):
-                            credential_private_type = msf_cred.private.type
-                            if (
-                                credential_private_type
-                                != "Metasploit::Credential::Password"
-                            ):
-                                record.value.append(
-                                    HiveLibrary.Record(
-                                        name=self.msf_records.Cred.private_type,
-                                        tool_name=self.msf_records.tool_name,
-                                        record_type=RecordTypes.STRING.value,
-                                        value=msf_cred.private.type,
-                                    )
+                            # Add private type
+                            record.value.append(
+                                HiveLibrary.Record(
+                                    name=self.msf_records.Cred.private_type,
+                                    tool_name=self.msf_records.tool_name,
+                                    record_type=RecordTypes.STRING.value,
+                                    value=private_type,
                                 )
+                            )
 
-                            # Add private data if private data is not empty
-                            if (
-                                credential_private_type
-                                == "Metasploit::Credential::Password"
-                            ):
-                                self.msf_records.Cred.private_data = "Password"
-
+                            # Add private data
                             record.value.append(
                                 HiveLibrary.Record(
                                     name=self.msf_records.Cred.private_data,
@@ -631,13 +657,27 @@ class HiveMetasploit:
                         hive_tag=hive_tag,
                     )
 
+                    # Add hive credentials
+                    hive_credential: HiveCredential = HiveCredential()
+                    hive_credential.assets = [
+                        HiveLibrary.Asset(asset=msf_service.host.address)
+                    ]
+                    hive_credential.tags = [
+                        HiveLibrary.Tag(name="metasploit_credential")
+                    ]
+                    hive_credential.description = msf_cred.origin.module_full_name
+                    hive_credential.type = private_type
+                    hive_credential.login = msf_cred.public.username
+                    hive_credential.value = msf_cred.private.data
+                    hive_credentials.append(hive_credential)
+
             # Create hive hosts
             for host_index in range(len(hive_hosts)):
                 task_id: Optional[UUID] = self.hive_api.create_host(
                     project_id=hive_project_id, host=hive_hosts[host_index]
                 )
                 if isinstance(task_id, UUID):
-                    for _ in range(10):
+                    for _ in range(30):
                         hive_hosts[
                             host_index
                         ].import_result = self.hive_api.task_is_completed(
@@ -648,11 +688,38 @@ class HiveMetasploit:
                         else:
                             sleep(1)
 
-            return hive_hosts
+            # Create hive credentials
+            ip_labels: Optional[
+                List[HiveLibrary.Label]
+            ] = self.hive_api.get_ip_labels_for_project(project_id=hive_project_id)
+            for cred_index in range(len(hive_credentials)):
+                for ip_label in ip_labels:
+                    if ip_label.label == hive_credentials[cred_index].assets[0].asset:
+                        hive_credentials[cred_index].asset_ids = [ip_label.id]
+                        imported_credential: Optional[
+                            HiveLibrary.Credential
+                        ] = self.hive_api.create_credential(
+                            project_id=hive_project_id,
+                            credential=hive_credentials[cred_index],
+                        )
+                        if imported_credential is not None:
+                            if isinstance(imported_credential.id, int):
+                                for cred_field in fields(imported_credential):
+                                    setattr(
+                                        hive_credentials[cred_index],
+                                        cred_field.name,
+                                        getattr(imported_credential, cred_field.name),
+                                    )
+                                hive_credentials[cred_index].import_result = True
+
+            hive_objects.hosts = hive_hosts
+            hive_objects.credentials = hive_credentials
+
+            return hive_objects
 
         except AssertionError as error:
             self._color.print_error("Assertion error:", f"{error}")
-        return hive_hosts
+        return hive_objects
 
     def export_from_hive_to_metasploit(
         self,
@@ -797,8 +864,7 @@ class HiveMetasploit:
 
                         # Init MSF service object
                         msf_service: Msf.Service = Msf.Service(
-                            workspace=msf_data.workspace,
-                            host=hive_host.ip
+                            workspace=msf_data.workspace, host=hive_host.ip
                         )
 
                         # Add port
